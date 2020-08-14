@@ -1,0 +1,154 @@
+#!/bin/bash
+
+###################################
+# v0.1
+# Written by Patrick Boyle 8-31-15
+# boylekpatrick@gmail.com
+###################################
+
+# This clears the results file
+> results
+
+echo -e "###  This script connects using SSH  ###\n\n"
+read -p "Username: " USERNAME
+read -sp "Password: " PASSWORD
+read -rp $'\nWould you like to correct boot statements if possible? [Y/N]:' CORRECTBOOT
+until [[ "$CORRECTBOOT" == "Y" || "$CORRECTBOOT" == "y" || "$CORRECTBOOT" == "N" || "$CORRECTBOOT" == "n" ]]; do  # Sanity check on user input
+	read -rp $'Only "Y" or "N" are accepted. Please try again.\n\nWould you like to correct boot statements if possible? [Y/N]:' CORRECTBOOT
+done
+
+echo -e "\nWorking..."
+echo -e "\nHOSTNAME  |  MD5 RESULT  |  RUNNING NEW CODE  |  BOOT STATEMENT"
+
+while read HOSTNAME  # read assigns first word of hosts file to HOSTNAME. Each line is a separate while loop
+	do
+		if [[ "$HOSTNAME" == *"SW"* ]]; then  # If the device is a switch, do switch stuff. Otherwise do router stuff
+			echo -e "show ver\nshow boot" > cmd-show
+			SHOWCMDS=$( ./etc/ciscocmd -Y --sshopts "-o KexAlgorithms=diffie-hellman-group1-sha1" -u $USERNAME -p $PASSWORD -t $HOSTNAME -l logfiles/ -a -r cmd-show )
+			CHASSIS=$( echo $SHOWCMDS | grep -oPm1 'WS-C.*?-' | head -1 )
+			else echo -e "show ver\nshow run | i boot" > cmd-show
+			SHOWCMDS=$( ./etc/ciscocmd -Y --sshopts "-o KexAlgorithms=diffie-hellman-group1-sha1" -u $USERNAME -p $PASSWORD -t $HOSTNAME -l logfiles/ -a -r cmd-show )
+			CHASSIS=$( echo $SHOWCMDS | grep -oPm1 'Cisco.*?\(r' | head -1 )
+		fi
+		if [[ "$SHOWCMDS" == *"failed to connect"* ]]; then  # This checks for failed connections and skips to the next loop iteration if true
+			STATUS="FAILED TO CONNECT"
+			echo "$HOSTNAME  $STATUS"
+			continue
+		fi
+		if [[ "$CHASSIS" == *"1841"* ]]; then
+			IMAGE="c1841-adventerprisek9-mz.151-4.M10.bin"
+			BOOTVAR=$( echo $SHOWCMDS | grep -oPm1 'boot system flash flash:.*' | head -1 )
+			echo -e "config t\nno boot system\nboot system flash flash:$IMAGE" > cmd-bootvar
+			echo -e "verify /md5 flash:c1841-adventerprisek9-mz.151-4.M10.bin c1836c0b77f8e71c0caaff25706c7949" > cmd-verify
+		elif [[ "$CHASSIS" == *"2801"* ]]; then
+			IMAGE="c2801-adventerprisek9-mz.151-4.M10.bin"
+			BOOTVAR=$( echo $SHOWCMDS | grep -oPm1 'boot system flash flash:.*' | head -1 )
+			echo -e "config t\nno boot system\nboot system flash flash:$IMAGE" > cmd-bootvar
+			echo -e "verify /md5 flash:c2801-adventerprisek9-mz.151-4.M10.bin 9508d093e4197281c2f3d7cab296e3d4" > cmd-verify
+		elif [[ "$CHASSIS" == *"2811"* || "$CHASSIS" == *"2821"* ]]; then
+			IMAGE="c2800nm-advipservicesk9-mz.151-4.M10.bin"
+			BOOTVAR=$( echo $SHOWCMDS | grep -oPm1 'boot system flash flash:.*' | head -1 )
+			echo -e "config t\nno boot system\nboot system flash flash:$IMAGE" > cmd-bootvar
+			echo -e "verify /md5 flash:c2800nm-advipservicesk9-mz.151-4.M10.bin 9421bc73bd327c9080542db7edd86483" > cmd-verify
+		elif [[ "$CHASSIS" == *"19"* ]]; then
+			IMAGE="c1900-universalk9-mz.SPA.152-4.M8.bin"
+			BOOTVAR=$( echo $SHOWCMDS | grep -oPm1 'boot system flash flash:.*' | head -1 )
+			echo -e "config t\nno boot system\nboot system flash flash:$IMAGE" > cmd-bootvar
+			echo -e "verify /md5 flash:c1900-universalk9-mz.SPA.152-4.M8.bin 22cfb8fd7ca830bc6c62910abeaf63d3" > cmd-verify
+		elif [[ "$CHASSIS" == *"2911"* ]]; then
+			IMAGE="c2900-universalk9-mz.SPA.152-4.M8.bin"
+			BOOTVAR=$( echo $SHOWCMDS | grep -oPm1 'boot system flash flash:.*' | head -1 )
+			echo -e "config t\nno boot system\nboot system flash flash:$IMAGE" > cmd-bootvar
+			echo -e "verify /md5 flash:c2900-universalk9-mz.SPA.152-4.M8.bin e36fe9a568a25661c614666d8f53f25c" > cmd-verify
+		elif [[ "$CHASSIS" == "WS-C2960S-" ]]; then
+			IMAGE="c2960s-universalk9-mz.150-2.SE7/c2960s-universalk9-mz.150-2.SE7.bin"
+			BOOTVAR=$( echo $SHOWCMDS | grep -oPm1 'BOOT path-list.*' | head -1 )
+			echo -e "config t\nboot system flash:/$IMAGE" > cmd-bootvar
+			echo -e "verify /md5 flash:c2960s-universalk9-mz.150-2.SE7/c2960s-universalk9-mz.150-2.SE7.bin 2d803e680302bd0bf8f87a8de83fa4b1" > cmd-verify
+		elif [[ "$CHASSIS" == "WS-C2960G-" || "$CHASSIS" == "WS-C2960-" ]]; then
+			IMAGE="c2960-lanbasek9-mz.150-2.SE7/c2960-lanbasek9-mz.150-2.SE7.bin"
+			BOOTVAR=$( echo $SHOWCMDS | grep -oPm1 'BOOT path-list.*' | head -1 )
+			echo -e "config t\nboot system flash:/$IMAGE" > cmd-bootvar
+			echo -e "verify /md5 flash:c2960-lanbasek9-mz.150-2.SE7/c2960-lanbasek9-mz.150-2.SE7.bin a5f081e6e7ce7b0dba8bf118b56cf839" > cmd-verify
+		elif [[ "$CHASSIS" == "WS-C2960C-" ]]; then
+			IMAGE="c2960c405-universalk9-mz.150-2.SE7/c2960c405-universalk9-mz.150-2.SE7.bin"
+			BOOTVAR=$( echo $SHOWCMDS | grep -oPm1 'BOOT path-list.*' | head -1 )
+			echo -e "config t\nboot system flash:/$IMAGE" > cmd-bootvar
+			echo -e "verify /md5 flash:c2960c405-universalk9-mz.150-2.SE7/c2960c405-universalk9-mz.150-2.SE7.bin df3d01c9842d90969f98d7df0a27c5e4" > cmd-verify
+		elif [[ "$CHASSIS" == "WS-C2960CG-" ]]; then
+			IMAGE="c2960c405ex-universalk9-mz.150-2.SE7/c2960c405ex-universalk9-mz.150-2.SE7.bin"
+			BOOTVAR=$( echo $SHOWCMDS | grep -oPm1 'BOOT path-list.*' | head -1 )
+			echo -e "config t\nboot system flash:/$IMAGE" > cmd-bootvar
+			echo -e "verify /md5 flash:c2960c405ex-universalk9-mz.150-2.SE7/c2960c405ex-universalk9-mz.150-2.SE7.bin cbc2ab6868a4b822882daa777626e923" > cmd-verify
+		elif [[ "$CHASSIS" == "WS-C2960X-" ]]; then
+			IMAGE="c2960x-universalk9-mz.152-3.E1/c2960x-universalk9-mz.152-3.E1.bin"
+			BOOTVAR=$( echo $SHOWCMDS | grep -oPm1 'BOOT path-list.*' | head -1 )
+			echo -e "config t\nboot system flash:/$IMAGE" > cmd-bootvar
+			echo -e "verify /md5 flash:c2960x-universalk9-mz.152-3.E1/c2960x-universalk9-mz.152-3.E1.bin da08a2cb575ff8fa225a2269fb309298" > cmd-verify
+		elif [[ "$CHASSIS" == "WS-C3560C-" ]]; then
+			IMAGE="c3560c405-universalk9-mz.150-2.SE7/c3560c405-universalk9-mz.150-2.SE7.bin"
+			BOOTVAR=$( echo $SHOWCMDS | grep -oPm1 'BOOT path-list.*' | head -1 )
+			echo -e "config t\nboot system flash:/$IMAGE" > cmd-bootvar
+			echo -e "verify /md5 flash:c3560c405-universalk9-mz.150-2.SE7/c3560c405-universalk9-mz.150-2.SE7.bin 4297f7abe6f7367d5c2813350967fd5e" > cmd-verify
+		elif [[ "$CHASSIS" == "WS-C3560CG-" ]]; then
+			IMAGE="c3560c405ex-universalk9-mz.150-2.SE7/c3560c405ex-universalk9-mz.150-2.SE7.bin"
+			BOOTVAR=$( echo $SHOWCMDS | grep -oPm1 'BOOT path-list.*' | head -1 )
+			echo -e "config t\nboot system flash:/$IMAGE" > cmd-bootvar
+			echo -e "verify /md5 flash:c3560c405ex-universalk9-mz.150-2.SE7/c3560c405ex-universalk9-mz.150-2.SE7.bin 1d804a9a884da72912d34852c1f8e28a" > cmd-verify
+		elif [[ "$CHASSIS" == "WS-C3560E-" || "$CHASSIS" == "WS-C3560X-" ]]; then
+			IMAGE="c3560e-universalk9-mz.150-2.SE7/c3560e-universalk9-mz.150-2.SE7.bin"
+			BOOTVAR=$( echo $SHOWCMDS | grep -oPm1 'BOOT path-list.*' | head -1 )
+			echo -e "config t\nboot system flash:/$IMAGE" > cmd-bootvar
+			echo -e "verify /md5 flash:c3560e-universalk9-mz.150-2.SE7/c3560e-universalk9-mz.150-2.SE7.bin f6c41d6186c503edfb60139fa10a035b" > cmd-verify
+		elif [[ "$CHASSIS" == "WS-C3750E-" || "$CHASSIS" == "WS-C3750X-" ]]; then
+			IMAGE="c3750e-universalk9-mz.150-2.SE7/c3750e-universalk9-mz.150-2.SE7.bin"
+			BOOTVAR=$( echo $SHOWCMDS | grep -oPm1 'BOOT path-list.*' | head -1 )
+			echo -e "config t\nboot system flash:/$IMAGE" > cmd-bootvar
+			echo -e "verify /md5 flash:c3750e-universalk9-mz.150-2.SE7/c3750e-universalk9-mz.150-2.SE7.bin 5253e3985810478ccbf70acb4fa94eed" > cmd-verify
+		elif [[ "$CHASSIS" == "WS-C3750G-" ]]; then
+			IMAGE="c3750-ipservicesk9-mz.150-2.SE7/c3750-ipservicesk9-mz.150-2.SE7.bin"
+			BOOTVAR=$( echo $SHOWCMDS | grep -oPm1 'BOOT path-list.*' | head -1 )
+			echo -e "config t\nboot system flash:/$IMAGE" > cmd-bootvar
+			echo -e "verify /md5 flash:c3750-ipservicesk9-mz.150-2.SE7/c3750-ipservicesk9-mz.150-2.SE7.bin 0f6a61b834e2125864eed40d5688e0e4" > cmd-verify
+		fi
+		OUTPUT=$( ./etc/ciscocmd -Y --sshopts "-o KexAlgorithms=diffie-hellman-group1-sha1" -u $USERNAME -p $PASSWORD -t $HOSTNAME -l logfiles/ -a -r cmd-verify )
+		RESULT=$( echo "$OUTPUT" | grep -o "Verified\|Error verifying\|No such file\|File not found" )
+		if [[ -s cmd-verify ]]; then
+			if [ "$RESULT" == "Verified" ]; then
+				STATUS="Success!"
+				if [[ "$BOOTVAR" == *"$IMAGE"* ]]; then
+					BOOTSTATUS="Y"
+				else
+					if [[ "$CORRECTBOOT" == "Y" || "$CORRECTBOOT" == "y" ]]; then
+						$( ./etc/ciscocmd -Y --sshopts "-o KexAlgorithms=diffie-hellman-group1-sha1" -u $USERNAME -p $PASSWORD -t $HOSTNAME -l logfiles/ -a -r cmd-bootvar ) >nul 2>nul
+						SHOWCMDS=$( ./etc/ciscocmd -Y --sshopts "-o KexAlgorithms=diffie-hellman-group1-sha1" -u $USERNAME -p $PASSWORD -t $HOSTNAME -l logfiles/ -a -r cmd-show )
+						if [[ "$SHOWCMDS" == *"$IMAGE"* ]]; then
+						BOOTSTATUS="Corrected"
+						else BOOTSTATUS="Correction failed"
+						fi
+					else BOOTSTATUS="N"
+					fi
+				fi
+			elif [ "$RESULT" == "Error verifying" ]; then
+					STATUS="VERIFICATION FAILED"
+			elif [ "$RESULT" == "No such file" || "$RESULT" == "File not found" ]; then
+					STATUS="IMAGE MISSING"
+			else STATUS="UNKNOWN ERROR"
+			fi
+		else STATUS="UNKNOWN DEVICE"
+		fi
+		if [[ "$SHOWCMDS" == *"15.0(2)SE7"* || "$SHOWCMDS" == *"15.2(3)E1"* || "$SHOWCMDS" == *"15.1(4)M10"* || "$SHOWCMDS" == *"15.2(4)M8"* ]]; then  # Asterisks mean "if this string contains"
+			NEWCODE="Y"
+			else NEWCODE="N"
+		fi
+		RESULTS=$( echo -e "$RESULTS \n$HOSTNAME:$STATUS:$NEWCODE:$BOOTSTATUS" )
+
+		echo -e "$HOSTNAME\t$STATUS\t$NEWCODE\t$BOOTSTATUS"
+		
+		# Clear the variables and cmd-verify file so that the next loop has a clean slate
+		unset OUTPUT
+		unset NEWCODE
+		unset HOSTNAME
+		> cmd-verify
+done < hosts  # Takes hosts file and inputs it to the while loop. MUST CONTAIN A NEWLINE AFTER THE LAST ENTRY
+echo -e "HOSTNAME:MD5 RESULT:RUNNING NEW CODE:BOOT STATEMENT\n$RESULTS" | column -t -s ':' >> results
